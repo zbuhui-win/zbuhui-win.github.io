@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.0.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.0.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.0.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.0.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.0.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.0.1',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":true,"scrollpercent":true,"onmobile":false,"dimmer":false},
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="dict底层实现在Python中，字典是依靠散列表或说哈希表(Hash Table)进行实现的，使用开放地址法解决冲突。所以其查找的时间复杂度会是O(1)，下文会具体讲解哈希表的工作原理和解决冲突时的具体方法。 也就是说，字典也是一个数组，但数组的索引是键经过哈希函数处理后得到的散列值。哈希函数的目的是使键均匀地分布在数组中，并且可以在内存中以O(1)的时间复杂度进行寻址，从而实现快速查找和修改。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="dict实现原理和哈希表">
+<meta property="og:url" content="http://yoursite.com/posts/f10df0a1.html">
+<meta property="og:site_name" content="One I Love">
+<meta property="og:description" content="dict底层实现在Python中，字典是依靠散列表或说哈希表(Hash Table)进行实现的，使用开放地址法解决冲突。所以其查找的时间复杂度会是O(1)，下文会具体讲解哈希表的工作原理和解决冲突时的具体方法。 也就是说，字典也是一个数组，但数组的索引是键经过哈希函数处理后得到的散列值。哈希函数的目的是使键均匀地分布在数组中，并且可以在内存中以O(1)的时间复杂度进行寻址，从而实现快速查找和修改。">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-04-19T12:48:47.804Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="dict实现原理和哈希表">
+<meta name="twitter:description" content="dict底层实现在Python中，字典是依靠散列表或说哈希表(Hash Table)进行实现的，使用开放地址法解决冲突。所以其查找的时间复杂度会是O(1)，下文会具体讲解哈希表的工作原理和解决冲突时的具体方法。 也就是说，字典也是一个数组，但数组的索引是键经过哈希函数处理后得到的散列值。哈希函数的目的是使键均匀地分布在数组中，并且可以在内存中以O(1)的时间复杂度进行寻址，从而实现快速查找和修改。">
+
+
+
+
+
+
+  <link rel="canonical" href="http://yoursite.com/posts/f10df0a1.html">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>dict实现原理和哈希表 | One I Love</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-CN">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">One I Love</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="切换导航栏">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>首页</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>关于</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>分类</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>标签</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>归档</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/posts/f10df0a1.html">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="zbuhui am i">
+      <meta itemprop="description" content="aa撒地方aaaa">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="One I Love">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">dict实现原理和哈希表
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+
+              
+                
+              
+
+              <time title="创建时间：2019-03-06 19:12:12" itemprop="dateCreated datePublished" datetime="2019-03-06T19:12:12+08:00">2019-03-06</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">更新于</span>
+                
+                <time title="修改时间：2019-04-19 20:48:47" itemprop="dateModified" datetime="2019-04-19T20:48:47+08:00">2019-04-19</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/linux/" itemprop="url" rel="index"><span itemprop="name">linux</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+              
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+            
+                <span class="post-meta-item-text">评论数：</span>
+                <a href="/posts/f10df0a1.html#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count valine-comment-count" data-xid="/posts/f10df0a1.html" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h2 id="dict底层实现"><a href="#dict底层实现" class="headerlink" title="dict底层实现"></a>dict底层实现</h2><p>在Python中，字典是依靠散列表或说哈希表(Hash Table)进行实现的，使用开放地址法解决冲突。所以其查找的时间复杂度会是O(1)，下文会具体讲解哈希表的工作原理和解决冲突时的具体方法。</p>
+<p>也就是说，字典也是一个数组，但数组的索引是键经过哈希函数处理后得到的散列值。哈希函数的目的是使键均匀地分布在数组中，并且可以在内存中以O(1)的时间复杂度进行寻址，从而实现快速查找和修改。哈希表中哈希函数的设计困难在于将数据均匀分布在哈希表中，从而尽量减少哈希碰撞和冲突。由于不同的键可能具有相同的哈希值，即可能出现冲突，高级的哈希函数能够使冲突数目最小化。</p>
+<p>通常情况下建立哈希表的具体过程如下：</p>
+<ol>
+<li><p>数据添加：把key通过哈希函数转换成一个整型数字，然后就将该数字对数组长度进行取余，取余结果就当作数组的下标，将value存储在以该数字为下标的数组空间里。</p>
+</li>
+<li><p>数据查询：再次使用哈希函数将key转换为对应的数组下标，并定位到数组的位置获取value</p>
+<p>哈希函数就是一个映射，因此哈希函数的设定很灵活，只要使得任何关键字由此所得的哈希函数值都落在表长允许的范围之内即可。本质上看哈希函数不可能做成一个一对一的映射关系，其本质是一个多对一的映射，这也就引出了下面一个概念–哈希冲突或者说哈希碰撞。哈希碰撞是不可避免的，但是一个好的哈希函数的设计需要尽量避免哈希碰撞。</p>
+</li>
+</ol>
+<p>Python2中使用使用开放地址法解决冲突。</p>
+<p>CPython使用伪随机探测(pseudo-random probing)的散列表(hash table)作为字典的底层数据结构。由于这个实现细节，只有可哈希的对象才能作为字典的键</p>
+<hr>
+<h2 id="哈希表"><a href="#哈希表" class="headerlink" title="哈希表"></a>哈希表</h2><p>哈希表是key-value类型的数据结构，通过关键码值直接进行访问。通过散列函数进行键和数组的下标映射从而决定该键值应该放在哪个位置，哈希表可以理解为一个键值需要按一定规则存放的数组，而哈希函数就是这个规则。此处提出几个专业名词后面会一一进行介绍。</p>
+<ul>
+<li><p>哈希函数</p>
+</li>
+<li><p>装填因子</p>
+</li>
+<li><p>冲突</p>
+</li>
+</ul>
+<h3 id="1-哈希表产生的原因"><a href="#1-哈希表产生的原因" class="headerlink" title="1.哈希表产生的原因"></a>1.哈希表产生的原因</h3><blockquote>
+<p>假设我们存在一个简单的键值对结构，键-员工号，值-是否在岗。现在需要这样一个功能，输入员工号，返回该员工是否在岗，理想的方法是创建一个长度为Max(员工号)的数组，数组下标就是员工号，数组中的值用0和1对是否在岗进行区分，这样只需要O(1)的时间复杂度就可以完成操作，但是扩展性不强，存在以下问题。 </p>
+</blockquote>
+<ol>
+<li>假设新进员工的员工号比Max(员工号)还要大，这就需要重新申请数组进行迁移操作。 </li>
+<li>假设一种极端的情况，存在两个员工，员工号分别是1和100000000001，这样子的话按照先前的设计思路，是会浪费很大的存储空间的。<br>上面两点，第一点是因为数组的固定申请大小的属性所决定，而第二点就是引入哈希表的原因，会不会存在一个方法，让一个大员工号变小而而且没有标记，哈希函数便产生，假设此处的哈希规则是除3取模，则员工1得到的哈希值是1，员工100000000001得到的哈希值是</li>
+<li>这样的话按照设计思路，只需要一个大小为2的数组便可以覆盖了，这就是哈希思想。<br>算法中时间和空间是不能兼得的，哈希表就是一种用合理的时间消耗去减少大量空间消耗的操作，这取决于具体的功能要求。</li>
+</ol>
+<h3 id="2-哈希函数"><a href="#2-哈希函数" class="headerlink" title="2. 哈希函数"></a>2. 哈希函数</h3><p>上面的例子中哈希函数的设计很随意，但是从这个例子中我们也可以得到信息：</p>
+<p>哈希函数就是一个映射，因此哈希函数的设定很灵活，只要使得任何关键字由此所得的哈希函数值都落在表长允许的范围之内即可；<br>并不是所有的输入都只对应唯一一个输出，也就是哈希函数不可能做成一个一对一的映射关系，其本质是一个多对一的映射，这也就引出了下面一个概念–冲突。</p>
+<h3 id="3-冲突"><a href="#3-冲突" class="headerlink" title="3. 冲突"></a>3. 冲突</h3><p>只要不是一对一的映射关系，冲突就必然会发生，还是上面的极端例子，这时新加了一个员工号为2的员工，先不考虑我们的数组大小已经定为2了，按照之前的哈希函数，工号为2的员工哈希值也是2，这与100000000001的员工一样了，这就是一个冲突，针对不同的解决思路，提出三个不同的解决方法。</p>
+<h3 id="4-冲突解决方法"><a href="#4-冲突解决方法" class="headerlink" title="4.冲突解决方法"></a>4.冲突解决方法</h3><h4 id="4-1-开放地址"><a href="#4-1-开放地址" class="headerlink" title="4.1 开放地址"></a>4.1 开放地址</h4><p>开放地址的意思是除了哈希函数得出的地址可用，当出现冲突的时候其他的地址也一样可用，常见的开放地址思想的方法有线性探测再散列，二次探测再散列，这些方法都是在第一选择被占用的情况下的解决方法。</p>
+<h4 id="4-2-再哈希法"><a href="#4-2-再哈希法" class="headerlink" title="4.2 再哈希法"></a>4.2 再哈希法</h4><p>这个方法是按顺序规定多个哈希函数，每次查询的时候按顺序调用哈希函数，调用到第一个为空的时候返回不存在，调用到此键的时候返回其值。</p>
+<h4 id="4-3-链地址法"><a href="#4-3-链地址法" class="headerlink" title="4.3 链地址法"></a>4.3 链地址法</h4><p>将所有关键字哈希值相同的记录都存在同一线性链表中，这样不需要占用其他的哈希地址，相同的哈希值在一条链表上，按顺序遍历就可以找到。</p>
+<h4 id="4-4公共溢出区"><a href="#4-4公共溢出区" class="headerlink" title="4.4公共溢出区"></a>4.4公共溢出区</h4><p>其基本思想是：所有关键字和基本表中关键字为相同哈希值的记录，不管他们由哈希函数得到的哈希地址是什么，一旦发生冲突，都填入溢出表。</p>
+<h4 id="5-装填因子α"><a href="#5-装填因子α" class="headerlink" title="5.装填因子α"></a>5.装填因子α</h4><p>一般情况下，处理冲突方法相同的哈希表，其平均查找长度依赖于哈希表的装填因子。哈希表的装填因子定义为表中填入的记录数和哈希表长度的壁纸，也就是标志着哈希表的装满程度。直观看来，α越小，发生冲突的可能性就越小，反之越大。一般0.75比较合适，涉及数学推导<br>原文：<a href="https://blog.csdn.net/shouting3901/article/details/80468735" target="_blank" rel="noopener">https://blog.csdn.net/shouting3901/article/details/80468735</a> </p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/posts/8e9b50d0.html" rel="next" title="GitHub + Hexo 搭建个人博客">
+                <i class="fa fa-chevron-left"></i> GitHub + Hexo 搭建个人博客
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/posts/9a0369ec.html" rel="prev" title="布隆过滤器">
+                布隆过滤器 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+    <div class="comments" id="comments">
+    </div>
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">zbuhui am i</p>
+              <div class="site-description motion-element" itemprop="description">aa撒地方aaaa</div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">9</span>
+                    <span class="site-state-item-name">日志</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">分类</span>
+                  </a>
+                </div>
+              
+
+              
+            </nav>
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/zbuhui" title="GitHub &rarr; https://github.com/zbuhui" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="mailto:zbuhui@126.com" title="E-Mail &rarr; mailto:zbuhui@126.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://blog.csdn.net/zbuhui" title="csdn &rarr; https://blog.csdn.net/zbuhui" rel="noopener" target="_blank"><i class="fa fa-fw fa-globe"></i>csdn</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#dict底层实现"><span class="nav-number">1.</span> <span class="nav-text">dict底层实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#哈希表"><span class="nav-number">2.</span> <span class="nav-text">哈希表</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-哈希表产生的原因"><span class="nav-number">2.1.</span> <span class="nav-text">1.哈希表产生的原因</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-哈希函数"><span class="nav-number">2.2.</span> <span class="nav-text">2. 哈希函数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-冲突"><span class="nav-number">2.3.</span> <span class="nav-text">3. 冲突</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-冲突解决方法"><span class="nav-number">2.4.</span> <span class="nav-text">4.冲突解决方法</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#4-1-开放地址"><span class="nav-number">2.4.1.</span> <span class="nav-text">4.1 开放地址</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-2-再哈希法"><span class="nav-number">2.4.2.</span> <span class="nav-text">4.2 再哈希法</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-3-链地址法"><span class="nav-number">2.4.3.</span> <span class="nav-text">4.3 链地址法</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-4公共溢出区"><span class="nav-number">2.4.4.</span> <span class="nav-text">4.4公共溢出区</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#5-装填因子α"><span class="nav-number">2.4.5.</span> <span class="nav-text">5.装填因子α</span></a></li></ol></li></ol></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+        <div class="back-to-top">
+          <i class="fa fa-arrow-up"></i>
+          
+            <span id="scrollpercent"><span>0</span>%</span>
+          
+        </div>
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">zbuhui am i</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.0.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/src/utils.js?v=7.0.1"></script>
+
+  <script src="/js/src/motion.js?v=7.0.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/src/affix.js?v=7.0.1"></script>
+
+  <script src="/js/src/schemes/pisces.js?v=7.0.1"></script>
+
+
+
+  
+  <script src="/js/src/scrollspy.js?v=7.0.1"></script>
+<script src="/js/src/post-details.js?v=7.0.1"></script>
+
+
+
+  
+
+
+  <script src="/js/src/next-boot.js?v=7.0.1"></script>
+
+
+  
+  
+  
+
+<script src="//cdn1.lncld.net/static/js/3.11.1/av-min.js"></script>
+
+
+
+<script src="//unpkg.com/valine/dist/Valine.min.js"></script>
+
+<script>
+  var GUEST = ['nick', 'mail', 'link'];
+  var guest = 'nick,mail,link';
+  guest = guest.split(',').filter(function(item) {
+    return GUEST.indexOf(item) > -1;
+  });
+  new Valine({
+    el: '#comments',
+    verify: false,
+    notify: false,
+    appId: '6HMErujiPECC1DheVvBCIhF2-gzGzoHsz',
+    appKey: 'q0PbGL1E447ukBrLJh7yOrkA',
+    placeholder: 'Just go go',
+    avatar: 'mm',
+    meta: guest,
+    pageSize: '10' || 10,
+    visitor: false
+  });
+</script>
+
+
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
